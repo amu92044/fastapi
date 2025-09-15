@@ -77,6 +77,8 @@ class TokenData(BaseModel):
 
 
 # ----------------- Votes -----------------
+from typing import Annotated
+
 class Vote(BaseModel):
     post_id: int
-    dir: conint(le=1, ge=0)  # 1 = upvote, 0 = remove vote
+    dir: Annotated[int, 0<= 1]  # 1 = upvote, 0 = remove vote

@@ -1,45 +1,49 @@
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
+from typing import Union
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+
 from app import schemas, database, models
 from . import config
 
+# Dependency to extract token from request headers
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-SECRET_KEY = config.settings.secret_key  # 🔑 move this to env variable
-ALGORITHM = config.settings.algorithm  # 🔑 move this to env variable
-ACCESS_TOKEN_EXPIRE_MINUTES = config.settings.access_token_expire_minutes  # 🔑 move this to env variable
+# Config from .env
+SECRET_KEY = config.settings.secret_key
+ALGORITHM = config.settings.algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = config.settings.access_token_expire_minutes
 
 
-# Create JWT
-def create_access_token(data: dict):
+# Create JWT access token
+def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-# Verify JWT
-def verify_access_token(token: str, credentials_exception):
+# Verify the JWT token and extract user ID
+def verify_access_token(token: str, credentials_exception: HTTPException) -> schemas.TokenData:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        id: int = payload.get("user_id")
-        if id is None:
+        user_id: int = payload.get("user_id")
+        if user_id is None:
             raise credentials_exception
-        token_data = schemas.TokenData(id=id)
+        return schemas.TokenData(id=user_id)
     except JWTError:
         raise credentials_exception
-    return token_data
 
 
-# Get current user
+# FastAPI dependency to get current user from token
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(database.get_db)
-):
+) -> models.User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
